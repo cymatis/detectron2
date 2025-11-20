@@ -448,7 +448,7 @@ class AMPTrainer(SimpleTrainer):
         gather_metric_period=1,
         zero_grad_before_forward=False,
         grad_scaler=None,
-        precision: torch.dtype = torch.float16,
+        precision: torch.dtype = torch.bfloat16,
         log_grad_scaler: bool = False,
         async_write_metrics=False,
     ):
@@ -469,12 +469,13 @@ class AMPTrainer(SimpleTrainer):
         )
 
         if grad_scaler is None:
-            from torch.cuda.amp import GradScaler
+            from torch.amp import GradScaler
 
-            grad_scaler = GradScaler()
+            grad_scaler = GradScaler("cuda")
         self.grad_scaler = grad_scaler
         self.precision = precision
         self.log_grad_scaler = log_grad_scaler
+        print(f"[INFO] AMPTrainer initialized with precision={self.precision}")
 
     def run_step(self):
         """
@@ -482,7 +483,7 @@ class AMPTrainer(SimpleTrainer):
         """
         assert self.model.training, "[AMPTrainer] model was changed to eval mode!"
         assert torch.cuda.is_available(), "[AMPTrainer] CUDA is required for AMP training!"
-        from torch.cuda.amp import autocast
+        from torch.amp import autocast
 
         start = time.perf_counter()
         data = next(self._data_loader_iter)
@@ -490,7 +491,7 @@ class AMPTrainer(SimpleTrainer):
 
         if self.zero_grad_before_forward:
             self.optimizer.zero_grad()
-        with autocast(dtype=self.precision):
+        with autocast("cuda", dtype=self.precision):
             loss_dict = self.model(data)
             if isinstance(loss_dict, torch.Tensor):
                 losses = loss_dict
